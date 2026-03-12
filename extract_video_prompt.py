@@ -88,6 +88,22 @@ def caption_image(processor, model, img_path: Path, device: str, max_new_tokens:
     return " ".join(text.strip().split())
 
 
+def caption_images_batch(
+    processor, model, img_paths: List[Path], device: str, max_new_tokens: int = 40
+) -> List[str]:
+    """批量推理，显著加速（尤其 GPU/MPS）。"""
+    if not img_paths:
+        return []
+    images = [Image.open(p).convert("RGB") for p in img_paths]
+    inputs = processor(images=images, return_tensors="pt").to(device)
+    with torch.no_grad():
+        out = model.generate(**inputs, max_new_tokens=max_new_tokens)
+    return [
+        " ".join(processor.decode(out[i], skip_special_tokens=True).strip().split())
+        for i in range(len(img_paths))
+    ]
+
+
 def compress_timeline(captions: List[Dict], min_seg_len_sec: float = 1.5):
     """简单分段：相邻 caption 完全一致归并；太短段会尝试并入前段"""
     if not captions:
@@ -135,7 +151,15 @@ def main():
     parser.add_argument("--outdir", default="./out", help="输出目录")
     parser.add_argument("--fps", type=float, default=1.0, help="抽帧频率（每秒几帧）")
     parser.add_argument("--model", default="Salesforce/blip-image-captioning-base", help="caption 模型")
-    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    def _default_device():
+        if torch.cuda.is_available():
+            return "cuda"
+        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            return "mps"  # Apple Silicon 加速
+        return "cpu"
+
+    parser.add_argument("--device", default=_default_device())
+    parser.add_argument("--batch-size", type=int, default=8, help="批量推理帧数，越大越快但显存占用越高（建议 4~16）")
     args = parser.parse_args()
 
     video_path = Path(args.video)
@@ -155,17 +179,20 @@ def main():
     print(f"[2/4] 加载模型: {args.model} ({args.device})")
     processor, model = load_model(args.model, args.device)
 
-    print("[3/4] 逐帧描述中...")
+    print(f"[3/4] 逐帧描述中（batch_size={args.batch_size}，device={args.device}）...")
     frame_caps = []
-    for idx, f in enumerate(tqdm(frames)):
-        t = sec_of_index(idx, args.fps)
-        cap = caption_image(processor, model, f, args.device)
-        frame_caps.append({
-            "index": idx,
-            "time": round(t, 3),
-            "frame": str(f),
-            "caption": cap
-        })
+    batch_size = max(1, args.batch_size)
+    for start in tqdm(range(0, len(frames), batch_size), desc="批次"):
+        batch_paths = frames[start : start + batch_size]
+        captions = caption_images_batch(processor, model, batch_paths, args.device)
+        for i, (f, cap) in enumerate(zip(batch_paths, captions)):
+            idx = start + i
+            frame_caps.append({
+                "index": idx,
+                "time": round(sec_of_index(idx, args.fps), 3),
+                "frame": str(f),
+                "caption": cap,
+            })
 
     print("[4/4] 生成结构化输出...")
     duration = get_video_duration(str(video_path))

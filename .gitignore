@@ -1,0 +1,39 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# 输出与生成文件
+out/
+batch_out/
+
+# 视频/媒体（体积大）
+videos/
+
+# 环境与密钥
+.env
+.env.local
+*.pem
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 日志与临时
+*.log
+.cache/
