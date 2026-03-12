@@ -82,6 +82,8 @@ python build_seedance_prompt.py \
 
 ## 4) 批量处理 + 一键导出多版本（新增）
 
+### 4.1 Python 命令方式
+
 ```bash
 python batch_seedance_export.py \
   --input-dir ./videos \
@@ -89,6 +91,22 @@ python batch_seedance_export.py \
   --fps 1 \
   --ratio 16:9 \
   --duration 15
+```
+
+### 4.2 run_all.sh 一键方式（推荐）
+
+```bash
+chmod +x run_all.sh
+./run_all.sh ./videos ./batch_out 1 16:9 15 ""
+```
+
+参数顺序：
+`./run_all.sh [input_dir] [output_dir] [fps] [ratio] [duration] [topic_prefix]`
+
+示例（带主题前缀）：
+
+```bash
+./run_all.sh ./videos ./batch_out 1 16:9 15 "国风武侠："
 ```
 
 可选参数：
